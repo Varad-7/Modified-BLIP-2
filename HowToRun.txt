@@ -1,0 +1,346 @@
+# Setup and Run Guide - Modified BLIP-2 with LAVIS
+
+## Environment Requirements
+
+### Python Version
+
+- **Python:** 3.10.x
+
+### System Requirements
+
+- CUDA 11.8 or higher (for GPU support)
+- GPU: NVIDIA GPU with at least 16GB VRAM (tested on A100, V100)
+- RAM: 32GB+ recommended
+- Storage: 50GB+ for model cache
+
+---
+
+## Dependencies - Complete List
+
+### Core Dependencies
+
+```
+torch==2.0.1
+torchvision==0.15.2
+torchaudio==2.0.2
+```
+
+### LAVIS and Related
+
+```
+salesforce-lavis>=1.0.0
+einops>=0.6.1
+timm>=0.9.0
+transformers>=4.25.0
+```
+
+### Image Processing
+
+```
+Pillow>=9.0.0
+opencv-python>=4.6.0
+scikit-image>=0.19.0
+```
+
+### Data & Computation
+
+```
+numpy>=1.21.0
+scipy>=1.7.0
+pandas>=1.3.0
+scikit-learn>=1.0.0
+```
+
+### ML-Specific
+
+```
+fairscale>=0.4.6
+omegaconf>=2.1.0
+pytorch-lightning>=1.6.0
+```
+
+### Utilities
+
+```
+requests>=2.28.0
+tqdm>=4.62.0
+pyyaml>=5.0
+```
+
+### Video Support (Optional)
+
+```
+decord>=0.6.0  # Comment out if not needed
+```
+
+### Data Format Support
+
+```
+h5py>=3.0.0
+pyarrow>=10.0.0
+```
+
+### Visualization
+
+```
+matplotlib>=3.5.0
+```
+
+---
+
+## Installation Steps
+
+### Step 1: Clone Repository
+
+```bash
+cd /data1/mariam/varad_mech/Lavis_BLIP/
+git clone <your-repo-url>
+cd LAVIS
+```
+
+### Step 2: Create Virtual Environment
+
+```bash
+python3.10 -m venv venv
+source venv/bin/activate
+```
+
+### Step 3: Upgrade pip and setuptools
+
+```bash
+pip install --upgrade pip setuptools wheel
+```
+
+### Step 4: Install PyTorch (CUDA 11.8)
+
+```bash
+pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
+```
+
+### Step 5: Install LAVIS Package
+
+```bash
+pip install -e .
+```
+
+### Step 6: Install All Dependencies
+
+```bash
+pip install -r requirements_full.txt
+```
+
+### Step 7: Verify Installation
+
+```bash
+python verify_lavis.py
+```
+
+---
+
+## Running the Code
+
+### Verify LAVIS Setup
+
+Runs BLIP-2 OPT on 4 local test images and saves captioned outputs.
+
+```bash
+# Activate environment
+source venv/bin/activate
+
+# Run verification script
+python verify_lavis.py
+```
+
+**Output:**
+
+- Console logs with captions for each image
+- Saved images: `captioned_1.png`, `captioned_2.png`, etc. in `/data1/mariam/varad_mech/Lavis_BLIP/LAVIS/`
+
+### Running Custom Tasks
+
+#### Image Captioning
+
+```python
+import torch
+from lavis.models import load_model_and_preprocess
+from PIL import Image
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model, vis_processors, _ = load_model_and_preprocess(
+    name="blip2_opt",
+    model_type="pretrain_opt2.7b",
+    is_eval=True,
+    device=device
+)
+
+image = Image.open("your_image.jpg").convert("RGB")
+image_tensor = vis_processors["eval"](image).unsqueeze(0).to(device)
+
+with torch.no_grad():
+    caption = model.generate({"image": image_tensor})
+print(caption[0])
+```
+
+#### VQA (Visual Question Answering)
+
+```python
+model, vis_processors, txt_processors = load_model_and_preprocess(
+    name="blip2_opt",
+    model_type="pretrain_opt2.7b",
+    is_eval=True,
+    device=device
+)
+
+image = Image.open("your_image.jpg").convert("RGB")
+image_tensor = vis_processors["eval"](image).unsqueeze(0).to(device)
+question = "What is in the image?"
+txt = txt_processors["eval"](question)
+
+with torch.no_grad():
+    answer = model.generate({"image": image_tensor, "text_input": [txt]})
+print(answer[0])
+```
+
+---
+
+## Project Structure
+
+```
+LAVIS/
+├── app/                           # Streamlit app for demos
+├── configs/                       # Configuration files
+├── datasets/                      # Dataset handling
+├── lavis/
+│   ├── models/                    # Model implementations
+│   ├── processors/                # Image/text processors
+│   ├── tasks/                     # Task definitions
+│   └── datasets/                  # Dataset modules
+├── projects/                      # Project-specific code
+├── examples/                      # Jupyter notebooks
+├── RandomImages/                  # Test images (1.png, 2.png, 3.png, 4.png)
+├── verify_lavis.py               # Verification script (THIS ONE)
+├── train.py                       # Training script
+├── evaluate.py                    # Evaluation script
+├── requirements.txt               # Minimal requirements
+├── requirements_full.txt          # Full requirements
+└── setup.py                       # Package setup
+```
+
+---
+
+## Troubleshooting
+
+### Issue: CUDA Out of Memory
+
+**Solution:** Use a smaller model
+
+```bash
+export LAVIS_VERIFY_MODEL_TYPE=pretrain_opt1.3b
+python verify_lavis.py
+```
+
+### Issue: Model Download Timeout
+
+**Solution:** Manually download weights
+
+- Models are cached in `~/.cache/lavis/`
+- Increase timeout in verify_lavis.py
+
+### Issue: Missing `decord` for Video
+
+**Solution:** Install decord (optional)
+
+```bash
+pip install decord
+```
+
+Or skip if not using video tasks.
+
+### Issue: Import Errors
+
+**Solution:** Reinstall package in development mode
+
+```bash
+pip install -e .
+```
+
+### Issue: GPU Not Detected
+
+**Solution:** Check CUDA installation
+
+```bash
+python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
+```
+
+---
+
+## Key Modifications from Original LAVIS
+
+1. **Runtime Optimization:**
+   - Added `torch.no_grad()` for faster generation
+   - Support for `model.half()` on GPU
+   - Configurable max generation length
+
+2. **Local Image Processing:**
+   - Support for RandomImages folder (1.png-4.png)
+   - No network dependency for verification
+
+3. **Batch Processing:**
+   - Loop over multiple images
+   - Save captioned outputs with filenames
+
+4. **Environment Tracking:**
+   - Documented Python 3.10
+   - All dependency versions locked
+
+---
+
+## Next Steps
+
+### For RadDino + MedGemma Integration
+
+1. Create a new branch: `git checkout -b radding-medgemma`
+2. Modify vision encoder (ViT → RadDino)
+3. Modify language model (OPT → MedGemma)
+4. Test incrementally
+5. Fallback to `working-blip2-baseline` if needed
+
+---
+
+## Quick Reference Commands
+
+```bash
+# Activate environment
+source venv/bin/activate
+
+# Run verification
+python verify_lavis.py
+
+# Check Python version
+python --version
+
+# Check installed packages
+pip list
+
+# Check GPU
+nvidia-smi
+torch.cuda.is_available()
+
+# Git operations
+git status
+git log --oneline
+git checkout working-blip2-baseline  # Fallback to working state
+```
+
+---
+
+## Support & References
+
+- **Original LAVIS:** https://github.com/salesforce/LAVIS
+- **LAVIS Documentation:** https://github.com/salesforce/LAVIS/tree/main/docs
+- **BLIP-2 Paper:** https://arxiv.org/abs/2301.12597
+
+---
+
+**Last Updated:** February 7, 2026  
+**Tested On:** A100 GPU, Python 3.10, CUDA 11.8
