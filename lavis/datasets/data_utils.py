@@ -13,21 +13,29 @@ import tarfile
 import zipfile
 import cv2
 
-import decord
+try:
+    import decord
+    from decord import VideoReader
+    decord.bridge.set_bridge("torch")
+except ImportError:
+    print("⚠️ Warning: 'decord' not found. Video loading will fail, but Image tasks will work.")
+    decord = None
+    VideoReader = None
 import webdataset as wds
 import numpy as np
 import torch
 from torch.utils.data.dataset import IterableDataset, ChainDataset
-from decord import VideoReader
 from lavis.common.registry import registry
 from lavis.datasets.datasets.base_dataset import ConcatDataset
 from tqdm import tqdm
-
-decord.bridge.set_bridge("torch")
 MAX_INT = registry.get("MAX_INT")
 
 
 def load_video(video_path, n_frms=MAX_INT, height=-1, width=-1, sampling="uniform"):
+    if VideoReader is None:
+        raise ImportError(
+            "decord is required for video loading. Install it with: conda install -c conda-forge decord"
+        )
     vr = VideoReader(uri=video_path, height=height, width=width)
 
     vlen = len(vr)
@@ -51,7 +59,7 @@ def load_video(video_path, n_frms=MAX_INT, height=-1, width=-1, sampling="unifor
 
 
 def apply_to_sample(f, sample):
-    ## add check for datasets that return none samples for missing items
+    # add check for datasets that return none samples for missing items
     if sample == None or len(sample) == 0:
         return {}
 
@@ -160,16 +168,19 @@ def concat_datasets(datasets):
             # if len(iterable_datasets) > 0:
             # concatenate map-style datasets and iterable-style datasets separately
             chained_datasets = (
-                ChainDataset(iterable_datasets) if len(iterable_datasets) > 0 else None
+                ChainDataset(iterable_datasets) if len(
+                    iterable_datasets) > 0 else None
             )
             concat_datasets = (
                 ConcatDataset(map_datasets) if len(map_datasets) > 0 else None
             )
 
             train_datasets = concat_datasets, chained_datasets
-            train_datasets = tuple([x for x in train_datasets if x is not None])
+            train_datasets = tuple(
+                [x for x in train_datasets if x is not None])
             train_datasets = (
-                train_datasets[0] if len(train_datasets) == 1 else train_datasets
+                train_datasets[0] if len(
+                    train_datasets) == 1 else train_datasets
             )
 
             datasets[split_name] = train_datasets
@@ -298,7 +309,8 @@ def uniform_frame_sampling(video_path, num_frames, target_height, target_width, 
 
     start_frame = int(start_time * frame_rate)
     end_frame = int(end_time * frame_rate)
-    frame_indices = list(range(start_frame, end_frame + 1, (end_frame - start_frame + 1) // num_frames))
+    frame_indices = list(range(start_frame, end_frame + 1,
+                         (end_frame - start_frame + 1) // num_frames))
 
     frames = []
     for frame_index in frame_indices:
@@ -325,7 +337,8 @@ def head_tail_frame_sampling(video_path, num_frames, target_height, target_width
 
     start_frame = int(start_time * frame_rate)
     end_frame = int(end_time * frame_rate)
-    frame_indices = [start_frame] + [start_frame + (end_frame - start_frame) // (num_frames - 1) * i for i in range(1, num_frames - 1)] + [end_frame]
+    frame_indices = [start_frame] + [start_frame + (end_frame - start_frame) // (
+        num_frames - 1) * i for i in range(1, num_frames - 1)] + [end_frame]
 
     frames = []
     for frame_index in frame_indices:
@@ -339,7 +352,7 @@ def head_tail_frame_sampling(video_path, num_frames, target_height, target_width
     cap.release()
     if len(frames) == 0:
         return None
-    return torch.stack([torch.tensor(f).permute(2,0,1).float() for f in frames], dim=1)
+    return torch.stack([torch.tensor(f).permute(2, 0, 1).float() for f in frames], dim=1)
 
 
 def load_clip(video_path, num_frames, target_height, target_width, start_time=None, end_time=None, sampling="headtail"):

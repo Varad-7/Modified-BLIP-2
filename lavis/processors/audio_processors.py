@@ -8,7 +8,10 @@
 import torch
 import torchaudio
 import torchaudio.transforms as transforms
-from moviepy.editor import VideoFileClip
+try:
+    from moviepy.editor import VideoFileClip
+except ImportError:
+    VideoFileClip = None
 from omegaconf import OmegaConf
 import torchaudio.compliance.kaldi as ta_kaldi
 
@@ -37,6 +40,10 @@ class BeatsAudioProcessor(BaseProcessor):
 
     def _load_audio(self, aupath):
         if aupath.endswith('.mp4'):
+            if VideoFileClip is None:
+                raise ImportError(
+                    "moviepy is required to process MP4 files. Install it with: pip install moviepy"
+                )
             video = VideoFileClip(aupath)
             audio_np = video.audio.to_soundarray(fps=self.sampling_rate)
             if len(audio_np.shape) == 2:
@@ -45,10 +52,11 @@ class BeatsAudioProcessor(BaseProcessor):
             sr = self.sampling_rate
         else:
             waveform, sr = torchaudio.load(aupath)
-            if waveform.shape[0] == 2: 
+            if waveform.shape[0] == 2:
                 waveform = torch.mean(waveform, dim=0)
             if sr != self.sampling_rate:
-                resampler = torchaudio.transforms.Resample(sr, self.sampling_rate)
+                resampler = torchaudio.transforms.Resample(
+                    sr, self.sampling_rate)
                 waveform = resampler(waveform)
         return waveform
 
@@ -62,10 +70,14 @@ class BeatsAudioProcessor(BaseProcessor):
         # Helper function to return empty tensor for invalid audio
         def empty_audio_tensor():
             return torch.zeros((self.n_frames, self.frame_length, 128))
-        
+
         try:
             # Handle MP4 files
             if aupath.endswith('.mp4'):
+                if VideoFileClip is None:
+                    raise ImportError(
+                        "moviepy is required to process MP4 files. Install it with: pip install moviepy"
+                    )
                 video = VideoFileClip(aupath)
                 if start_sec is not None and end_sec is not None:
                     video = video.subclip(start_sec, end_sec)
@@ -87,7 +99,8 @@ class BeatsAudioProcessor(BaseProcessor):
 
             # Resample waveform if necessary
             if sr != self.sampling_rate:
-                resampler = torchaudio.transforms.Resample(sr, self.sampling_rate)
+                resampler = torchaudio.transforms.Resample(
+                    sr, self.sampling_rate)
                 waveform = resampler(waveform)
 
         except:
@@ -117,13 +130,15 @@ class BeatsAudioProcessor(BaseProcessor):
             if fbank_pad_len > 0:
                 fbank = torch.nn.ZeroPad2d((0, 0, 0, fbank_pad_len))(fbank)
             fbank = fbank[:self.frame_length * self.n_frames]
-            frames = [fbank[i*self.frame_length:(i+1)*self.frame_length].unsqueeze(0) for i in range(self.n_frames)]
+            frames = [
+                fbank[i*self.frame_length:(i+1)*self.frame_length].unsqueeze(0) for i in range(self.n_frames)]
         else:
             fbank_pad_len = fbank.shape[0] % self.frame_length
             if fbank_pad_len > 0:
                 fbank = torch.nn.ZeroPad2d((0, 0, 0, fbank_pad_len))(fbank)
             curr_frames = fbank.shape[0] // self.frame_length
-            frames = [fbank[i*self.frame_length:(i+1)*self.frame_length].unsqueeze(0) for i in range(curr_frames)]
+            frames = [
+                fbank[i*self.frame_length:(i+1)*self.frame_length].unsqueeze(0) for i in range(curr_frames)]
 
         return torch.cat(frames, dim=0)
 

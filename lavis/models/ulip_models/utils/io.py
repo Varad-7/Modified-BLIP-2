@@ -1,7 +1,12 @@
 import h5py
 import numpy as np
-import open3d
 import os
+
+try:
+    import open3d
+except ImportError:
+    open3d = None
+
 
 class IO:
     @classmethod
@@ -23,11 +28,16 @@ class IO:
     @classmethod
     def _read_npy(cls, file_path):
         return np.load(file_path)
-       
+
     # References: https://github.com/dimatura/pypcd/blob/master/pypcd/pypcd.py#L275
     # Support PCD files without compression ONLY!
     @classmethod
     def _read_pcd(cls, file_path):
+        if open3d is None:
+            raise ImportError(
+                "open3d is required to read .pcd (point cloud) files. "
+                "Install it with: pip install open3d"
+            )
         pc = open3d.io.read_point_cloud(file_path)
         ptcloud = np.array(pc.points)
         return ptcloud

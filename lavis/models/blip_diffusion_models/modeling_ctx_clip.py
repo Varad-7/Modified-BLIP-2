@@ -13,8 +13,26 @@ from transformers.models.clip.configuration_clip import CLIPTextConfig
 from transformers.models.clip.modeling_clip import (
     CLIPEncoder,
     CLIPPreTrainedModel,
-    _expand_mask,
 )
+
+
+def _expand_mask(mask: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
+    """
+    Expand attention mask from [bsz, seq_len] to [bsz, 1, tgt_seq_len, src_seq_len].
+    Converts binary mask (1 for valid, 0 for padding) to attention mask format.
+    """
+    bsz, src_len = mask.size()
+    tgt_len = src_len
+
+    # Expand to 4D: [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
+    expanded_mask = mask[:, None, None, :].expand(
+        bsz, 1, tgt_len, src_len).to(dtype)
+
+    # Invert so that 0 (padding) becomes 1 and 1 (valid) becomes 0
+    inverted_mask = 1.0 - expanded_mask
+
+    # Fill padding positions with very negative values so they get masked out in softmax
+    return inverted_mask.masked_fill(inverted_mask.bool(), torch.finfo(dtype).min)
 
 
 class CtxCLIPTextModel(CLIPPreTrainedModel):
@@ -190,7 +208,8 @@ class CtxCLIPTextEmbeddings(nn.Module):
 
         # position_ids (1, len position emb) is contiguous in memory and exported when serialized
         self.register_buffer(
-            "position_ids", torch.arange(config.max_position_embeddings).expand((1, -1))
+            "position_ids", torch.arange(
+                config.max_position_embeddings).expand((1, -1))
         )
 
     def forward(

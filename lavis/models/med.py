@@ -39,10 +39,37 @@ from transformers.modeling_outputs import (
 )
 from transformers.modeling_utils import (
     PreTrainedModel,
-    apply_chunking_to_forward,
-    find_pruneable_heads_and_indices,
-    prune_linear_layer,
 )
+
+try:
+    from transformers.modeling_utils import find_pruneable_heads_and_indices
+except ImportError:
+    # Fallback: return original heads and indices
+    def find_pruneable_heads_and_indices(heads, n_heads, head_size, already_pruned_heads):
+        """Fallback when not available in transformers."""
+        return heads, list(range(len(heads) * head_size))
+
+try:
+    from transformers.modeling_utils import prune_linear_layer
+except ImportError:
+    # Fallback: return module unchanged
+    def prune_linear_layer(layer, index, dim=0):
+        """Fallback when prune_linear_layer is not available."""
+        return layer
+
+try:
+    from transformers.modeling_utils import apply_chunking_to_forward
+except ImportError:
+    # Fallback for newer transformers versions
+    def apply_chunking_to_forward(forward_fn, chunk_size, chunk_dim, *input_tensors):
+        """
+        Fallback implementation for apply_chunking_to_forward from transformers.
+        """
+        if chunk_size is None or chunk_size <= 0:
+            return forward_fn(*input_tensors)
+        
+        # Default: apply the function directly without chunking if not available
+        return forward_fn(*input_tensors)
 from transformers.utils import logging
 from transformers.models.bert.configuration_bert import BertConfig
 from lavis.common.utils import get_abs_path
